@@ -74,6 +74,13 @@
     overflow: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
+    cursor: text;
+  }
+
+  .output-display:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
   }
 
   .highlight-conflict {
@@ -178,7 +185,8 @@
 
     <div class="panel" id="output-panel" style="display:none;">
       <label for="output">Anonymised Text</label>
-      <div id="output" class="output-display" aria-live="polite"></div>
+      <p class="hint">You can edit the text below before copying. Highlighted words need manual resolution.</p>
+      <div id="output" class="output-display" contenteditable="true" spellcheck="false" aria-label="Anonymised text, editable" aria-live="polite"></div>
       <div class="actions" style="margin-top:10px; margin-bottom:0;">
         <button id="copy-btn" class="secondary">Copy to clipboard</button>
         <span id="copy-status" class="hint" style="margin:0;"></span>
@@ -678,11 +686,13 @@
       $copyStatus.textContent = ok ? 'Copied.' : 'Copy failed.';
       setTimeout(function () { $copyStatus.textContent = ''; }, 2000);
     };
+    // Use innerText so edits made by the user are included, and HTML tags are stripped.
+    var textToCopy = $output.innerText;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(lastPlainOutput).then(function () { done(true); }, function () { done(false); });
+      navigator.clipboard.writeText(textToCopy).then(function () { done(true); }, function () { done(false); });
     } else {
       var ta = document.createElement('textarea');
-      ta.value = lastPlainOutput;
+      ta.value = textToCopy;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
