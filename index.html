@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pupil Name Anonymiser</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --border: #d9dde6;
+    --text: #1f2430;
+    --muted: #5b6478;
+    --accent: #2f5fde;
+    --accent-hover: #244cc0;
+    --warning-bg: #fff6e0;
+    --warning-border: #f1c477;
+    --warning-text: #7a5300;
+    --conflict-bg: #fff0ad;
+    --conflict-border: #c08600;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 32px 16px;
+  }
+
+  .container { max-width: 880px; margin: 0 auto; }
+
+  header { margin-bottom: 24px; }
+
+  h1 { margin: 0 0 8px; font-size: 26px; font-weight: 600; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+
+  input[type="text"], textarea, .output-display {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    background: #fff;
+    color: var(--text);
+  }
+
+  input[type="text"]:focus, textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+
+  textarea { min-height: 160px; resize: vertical; }
+
+  .output-display {
+    min-height: 160px;
+    max-height: 480px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .highlight-conflict {
+    background: var(--conflict-bg);
+    border-bottom: 2px dotted var(--conflict-border);
+    padding: 0 2px;
+    border-radius: 2px;
+    cursor: help;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 8px 0 16px;
+  }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  button:hover { background: var(--accent-hover); }
+  button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { background: #f0f2f7; }
+
+  .alert {
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+
+  .alert.warning {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    color: var(--warning-text);
+  }
+
+  .hidden { display: none; }
+
+  .legend { margin-top: 14px; font-size: 13px; }
+  .legend-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .legend-item {
+    background: #eef1f8;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+  .legend-item .arrow { color: var(--muted); margin: 0 4px; }
+  .legend-item .init { font-weight: 700; color: var(--accent); }
+
+  .conflicts-panel {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    color: var(--warning-text);
+    font-size: 14px;
+  }
+  .conflicts-panel ul { margin: 6px 0 0; padding-left: 20px; }
+  .conflicts-panel li { margin: 4px 0; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Pupil Name Anonymiser</h1>
+      <p>A tool for teachers and school leaders. All processing happens in your browser &mdash; no text is sent to a server.</p>
+    </header>
+
+    <div class="panel">
+      <label for="names">Pupil Names</label>
+      <p class="hint">Comma-separated. Each entry is treated as one person. Example: <em>Alex Gordon, Petunia, Mary-Jane Smith</em></p>
+      <input type="text" id="names" placeholder="e.g. Alex Gordon, Petunia, Rose Smith" autocomplete="off">
+    </div>
+
+    <div class="panel">
+      <label for="text">Text to Anonymise</label>
+      <p class="hint">Paste your text below. Only capitalised mentions of names will be replaced (so &ldquo;pat&rdquo; the verb is left alone).</p>
+      <textarea id="text" placeholder="Paste your text here..."></textarea>
+    </div>
+
+    <div class="actions">
+      <button id="anonymise-btn">Anonymise</button>
+      <button id="clear-btn" class="secondary">Clear</button>
+    </div>
+
+    <div id="alert" class="alert hidden"></div>
+
+    <div class="panel" id="output-panel" style="display:none;">
+      <label for="output">Anonymised Text</label>
+      <div id="output" class="output-display" aria-live="polite"></div>
+      <div class="actions" style="margin-top:10px; margin-bottom:0;">
+        <button id="copy-btn" class="secondary">Copy to clipboard</button>
+        <span id="copy-status" class="hint" style="margin:0;"></span>
+      </div>
+      <div id="conflicts-panel" class="conflicts-panel hidden">
+        <strong>Possible name conflicts &mdash; left unchanged for you to resolve manually:</strong>
+        <ul id="conflicts-list"></ul>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <footer>
+      Everything runs locally in your browser. Refresh the page to discard all input.<br>
+      Diminutive matching uses an embedded copy of Wiktionary's Appendix of English given names hypocoristics.
+    </footer>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Embedded Wiktionary hypocoristic dictionary ----------
+  // Inverted map: lowercase hypocoristic -> list of canonical given names.
+  // Source: Wiktionary, "Appendix:English given names". Entries < 3 chars filtered out.
+  var HYPO_DICT = {"ron":["Aaron","Byron","Cameron","Geronimo","Ronald","Tyron","Tyrone"],"ronny":["Aaron","Byron","Cameron","Ronald","Tyron","Tyrone"],"abbey":["Abigail"],"abbie":["Abigail"],"nabby":["Abigail"],"abby":["Abigail"],"gail":["Abigail"],"abe":["Abraham"],"bram":["Abraham"],"adi":["Adrian"],"ari":["Adrian"],"ian":["Adrian","Brian","Bryan","Christian","Damian","Fabian","Giovanni","John","Julian","Maximilian","Sebastian","Tristan"],"addy":["Adam"],"agg":["Agnes"],"nessie":["Agnes"],"nessy":["Agnes"],"nes":["Agnes"],"alex":["Alastair","Alexander","Alexandra","Alexandre"],"ala":["Alastair"],"bert":["Albert","Gilbert","Herbert","Norbert","Robert"],"bertie":["Albert"],"alberto":["Albert"],"burt":["Albert","Norbert"],"abbe":["Albert"],"lex":["Alexander","Alexandre"],"sander":["Alexander","Alexandre"],"sandy":["Alexander","Alexandre","Cassandra","Sandra"],"ander":["Alexander"],"ali":["Alexandra"],"lee":["Alexandra","Bailee","Bailey","Leanna","Leanne","Leland","Leonard","Leonardo","Riley"],"lexi":["Alexandra"],"sasha":["Alexandra"],"sandra":["Alexandra","Cassandra"],"xandra":["Alexandra"],"xander":["Alexandre"],"anderxie":["Alexandre"],"anki":["Ankita"],"alf":["Alfred"],"alfie":["Alfred"],"fred":["Alfred","Frederick","Fredrick"],"freddy":["Alfred","Frederick","Fredrick"],"lonnie":["Alonzo"],"lou":["Aloysius","Louis"],"lewie":["Aloysius","Lewis"],"mandy":["Amanda"],"mand":["Amanda"],"may":["Amanda"],"rishi":["Arisha"],"risha":["Arisha"],"rish":["Arisha"],"aru":["Arisha"],"andy":["Andrew","Armando"],"drew":["Andrew"],"angie":["Angela"],"gus":["Angus","Augustine","Augustus","Gustav","Gustave","Gustavo"],"gussy":["Angus","Augustine","Gustav","Gustave"],"nan":["Anne"],"nancy":["Anne"],"annie":["Anne","Hannah"],"toni":["Anthea","Antoinette","Antonia"],"tony":["Anthony","Antoine"],"ant":["Anthony"],"nettie":["Antoinette"],"nia":["Antonia"],"arnie":["Arnold"],"ash":["Ashley"],"ashy":["Ashley"],"gussie":["Augustine"],"auggy":["Augustus"],"august":["Augustus"],"auggie":["Augustus","August"],"anna":["Annabell","Hannah","Oona"],"drich":["Aldrich"],"rich":["Aldrich","Richard"],"ald":["Aldrich"],"drei":["Andrei"],"andi":["Andrei"],"baz":["Bailey","Barry","Basil"],"barb":["Barbara"],"barbie":["Barbara"],"barby":["Barbara"],"barney":["Barnaby"],"bart":["Bartholomew"],"barry":["Bartholomew"],"ben":["Benedict","Benjamin","Robinson"],"benny":["Benedict","Benjamin","Bonnie"],"benji":["Benjamin"],"berrietta":["Bernadette"],"nadetta":["Bernadette"],"bernie":["Bernard"],"beri":["Berry"],"bev":["Beverley"],"bunnie":["Bonnie"],"boner":["Bonnie"],"bon":["Bonnie"],"brad":["Bradley"],"brodie":["Bradley"],"bodie":["Bradley"],"brayden":["Bradley"],"rayden":["Bradley"],"brady":["Bradley"],"brent":["Brentley"],"brett":["Brentley"],"ryan":["Brian","Bryan"],"biddy":["Bridget"],"bridey":["Bridget"],"bríd":["Bridget"],"cal":["Callum","Calvin"],"cam":["Cameron","Camilla"],"cammie":["Camilla"],"millie":["Camilla"],"milly":["Camilla","Emily"],"candy":["Candace"],"carl":["Carlos"],"carly":["Carlos","Carlynn"],"lynn":["Carlynn","Carolyn","Linda","Madeline"],"carly-lynn":["Carlynn"],"cart":["Carter"],"carol":["Carolyn"],"lyn":["Carolyn"],"cassie":["Cassandra","Catherine"],"cass":["Cassandra"],"cat":["Catherine","Karina"],"cath":["Catherine"],"cate":["Catherine"],"cathy":["Catherine"],"katie":["Catherine","Katherine","Kathleen"],"erin":["Catherine","Katherine"],"rin":["Catherine","Erin"],"cecie":["Cecilia"],"cis":["Cecilia"],"cissie":["Cecilia"],"cecil":["Cecilia"],"charlie":["Charles"],"charley":["Charles"],"chuck":["Charles"],"chas":["Charles"],"chaz":["Charles"],"chazza":["Charles"],"chic":["Charles"],"kori":["Charles"],"chip":["Charles"],"chucky":["Charles"],"chet":["Chester"],"chesty":["Chester"],"chris":["Christian","Christopher"],"chrissy":["Christian","Christopher"],"tina":["Christina","Valentina"],"christy":["Christina","Christine"],"christine":["Christina"],"topher":["Christopher"],"kit":["Christopher","Katherine","Kathleen"],"claire":["Clara"],"clarette":["Clara"],"claude":["Claudius"],"clay":["Clayton"],"clem":["Clement","Clementine"],"cliff":["Clifford","Clifton"],"clint":["Clinton"],"clite":["Clitus"],"cole":["Cola","Colby","Colton"],"con":["Connor"],"conn":["Connor"],"connie":["Constance"],"coop":["Cooper"],"cody":["Cooper"],"coral":["Coraline"],"bin":["Corbin"],"cor":["Corbin"],"crys":["Crystal"],"tal":["Crystal"],"curt":["Curtis"],"cindy":["Cynthia"],"cin":["Cynthia"],"dan":["Daniel","Jordan"],"danny":["Daniel","Donovan","Jordan"],"danielle":["Daniella"],"danni":["Daniella","Danielle"],"dani":["Danielle"],"daz":["Darren"],"dave":["David"],"davey":["David"],"deb":["Deborah"],"debbie":["Deborah"],"dimitri":["Demetrius"],"denny":["Dennis"],"dee":["Dolores"],"dom":["Dominic","Dominick","Dominik"],"nick":["Dominic","Dominick","Dominik","Nicholas","Nickolas"],"nicky":["Dominic","Dominick","Dominik","Nicole","Nichola","Nicholas","Nichole","Nickolas"],"don":["Donald","Jordon"],"donny":["Donald","Donovan","Jordon"],"dorothy":["Dorothea"],"dot":["Dorothy"],"dottie":["Dorothy"],"doll":["Dorothy"],"dolly":["Dorothy"],"dory":["Dorothy","Morrison"],"dora":["Dorothy"],"doug":["Douglas"],"dunny":["Duncan"],"ike":["Dwight","Isaac","Isaack","Ishtiak"],"eddy":["Edmund","Edward","Edwin","Theodore"],"ned":["Edmund","Edward","Edwin","Theodore"],"neddy":["Edmund","Edward","Theodore"],"ted":["Edmund","Edward","Edwin","Theodore"],"teddy":["Edmund","Edward","Edwin","Theodore"],"eddie":["Edwin"],"neddie":["Edwin"],"lainie":["Elaine"],"ella":["Eleanor","Elizabeth"],"elle":["Eleanor"],"ellie":["Eleanor","Ellen","Elizabeth","Emily"],"nell":["Eleanor","Ellen","Helen"],"nellie":["Eleanor","Ellen","Helen"],"nora":["Eleanor"],"elliot":["Elliott"],"eliot":["Elliott"],"eliott":["Elliott"],"ell":["Elliott"],"lio":["Elliott"],"elijah":["Elliott"],"bess":["Elizabeth"],"bessie":["Elizabeth"],"bette":["Elizabeth"],"bet":["Elizabeth"],"betty":["Elizabeth"],"beth":["Elizabeth"],"betsy":["Elizabeth"],"eliza":["Elizabeth"],"elise":["Elizabeth"],"elsa":["Elizabeth"],"elsie":["Elizabeth"],"lisa":["Elizabeth"],"lisbeth":["Elizabeth"],"lissie":["Elizabeth"],"lily":["Elizabeth"],"libby":["Elizabeth"],"liddy":["Elizabeth"],"lizbeth":["Elizabeth"],"lizzy":["Elizabeth"],"lizzie":["Elizabeth"],"liz":["Elizabeth"],"liza":["Elizabeth"],"lilibet":["Elizabeth"],"emmy":["Emily"],"emma":["Emily"],"erer":["Erin"],"eth":["Ethan"],"gen":["Eugen"],"gene":["Eugene"],"owen":["Eugene"],"fabes":["Fabian"],"fab":["Fabian"],"ferd":["Ferdinand"],"sienna":["Fiona"],"siena":["Fiona"],"flora":["Florence"],"floss":["Florence"],"flossie":["Florence"],"flo":["Florence"],"renchy":["Florence"],"rench":["Florence"],"fran":["Frances","Francesca","Francesco","Francis"],"franny":["Frances","Francesca"],"fanny":["Frances","Francesca"],"frankie":["Frances","Francesco"],"frank":["Francesco","Francis","Franklin"],"franky":["Francis","Franklin"],"eric":["Frederick","Roderick"],"erick":["Frederick","Roderick"],"rick":["Frederick","Fredrick","Richard","Roderick"],"ricky":["Frederick","Richard"],"gabe":["Gabriel"],"gaby":["Gabriel"],"gabo":["Gabriel"],"gabrielle":["Gabriella"],"gabby":["Gabrielle"],"gabi":["Gabrielle"],"gal":["Garfield"],"gary":["Garfield"],"garry":["Garfield"],"geoff":["Geoffrey"],"georg":["George"],"georgy":["George"],"georgie":["George"],"gina":["Georgina","Regina","Virginia"],"gerry":["Gerald"],"geno":["Geronimo"],"gero":["Geronimo"],"geron":["Geronimo"],"nemo":["Geronimo"],"gerie":["Geronimo"],"jer":["Geronimo"],"gert":["Gertrude"],"gertie":["Gertrude"],"trudy":["Gertrude"],"gill":["Gillian"],"gilly":["Gillian"],"gil":["Gilbert"],"gib":["Gilbert"],"john":["Giovanni","Johnathan","Jonathan"],"gio":["Giovanni"],"gigi":["Giovanni"],"gordy":["Gordon"],"gracie":["Gracia"],"grace":["Gracia"],"grass":["Gracia"],"graz":["Gracia"],"acia":["Gracia"],"grassie":["Gracia"],"ruby":["Gracia"],"rubanetta":["Gracia"],"reba":["Gracia"],"gracina":["Gracia"],"greg":["Gregory"],"gregg":["Gregory"],"gwen":["Gwendolyn"],"gwendy":["Gwendolyn"],"tavo":["Gustavo"],"stavo":["Gustavo"],"ann":["Hannah"],"harry":["Harold","Harris","Harrison","Henry"],"hal":["Harold","Henry"],"hatty":["Harriet"],"harris":["Harrison"],"hank":["Harry","Henry"],"hanky":["Harry","Henry"],"elenie":["Helen"],"harriet":["Henrietta"],"henriette":["Henrietta"],"herb":["Herbert"],"herbie":["Herbert"],"hil":["Hilary"],"hilly":["Hilary"],"howie":["Howard"],"hunt":["Hunter"],"holls":["Holly"],"ing":["Ingrid"],"irv":["Irving"],"izzy":["Isabella","Isadore"],"isa":["Isabella"],"bella":["Isabella"],"bell":["Isabella"],"ivy":["Iva","Ivor"],"vet":["Iva"],"ava":["Iva"],"livia":["Iva"],"vor":["Ivor"],"jacky":["Jack","Jackson","Jaxon","Jaxson"],"jack":["Jackson","Jaxon","Jaxson","John"],"jake":["Jacob","Jason"],"coby":["Jacoby"],"jackie":["Jacqueline"],"jim":["James","Jamie","Jimmy"],"jimmy":["James","Jamie"],"jay":["James","Jamie","Jason","Jayceon","Jayden","Jayson"],"jamie":["James"],"jan":["Jane","Janet","Janice"],"jane":["Janet","Janice"],"janey":["Janet","Janice"],"jazz":["Jasmin"],"jaz":["Jasmin"],"jazzy":["Jasmin"],"jazza":["Jasmin"],"jase":["Jason"],"jeff":["Jeffrey"],"jeffie":["Jeffrey"],"jen":["Jennifer"],"jenny":["Jennifer"],"jenni":["Jennifer"],"jeremy":["Jeremiah"],"jerry":["Jeremiah","Jeremy","Jerome"],"jess":["Jessica"],"jessy":["Jessica"],"jessie":["Jessica"],"judy":["Jewel","Judith"],"joe":["Joel","Joseph"],"joey":["Joel","Joseph","Josephine"],"nathan":["Johnathan","Jonathan"],"johnny":["Johnathan","Jonathan"],"jon":["Jonathan"],"jonny":["Jonathan"],"judd":["Jordan"],"jordy":["Jordan","Jordon"],"josephine":["Josephina"],"josie":["Josephine"],"josh":["Joshua"],"joshi":["Joshua"],"jude":["Judith","Juliana"],"jules":["Julian","Julius"],"julie":["Juliana"],"jus":["Justin"],"tin":["Justin"],"just":["Justin"],"tinny":["Justin"],"justy":["Justin"],"juster":["Justin"],"kara":["Karina"],"cara":["Karina"],"caris":["Karina"],"carrier":["Karina"],"carry":["Karina"],"catrin":["Karina"],"stacy":["Karina"],"cats":["Karina"],"kathy":["Katherine","Kathleen"],"kat":["Katherine","Kathleen","Katrina"],"kate":["Katherine","Kathleen"],"kitty":["Katherine"],"katy":["Katherine"],"karen":["Katherine"],"trina":["Katrina","Trinity"],"kody":["Kodiak"],"kodik":["Kodiak"],"ken":["Kenneth","Kevin"],"kenny":["Kenneth","Kevin"],"kai":["Kerry","Malachi"],"kerin":["Kerry"],"keath":["Kerry"],"heath":["Kerry"],"ker":["Kerry"],"kim":["Kimberly"],"kimmy":["Kimberly"],"krissy":["Kristen"],"kris":["Kristen"],"lach":["Lachlan"],"lachy":["Lachlan"],"laurie":["Laura","Laurence"],"lori":["Laura"],"larry":["Laurence","Lawrence"],"lawrie":["Lawrence"],"leanne":["Leanna"],"len":["Leonard","Leonardo"],"lenny":["Leonard","Leonardo"],"leon":["Leonard","Leonardo"],"leo":["Leonard","Leonardo"],"les":["Lester"],"linc":["Lincoln"],"link":["Lincoln"],"lil":["Lillian","Lily"],"lilly":["Lillian"],"lindy":["Linda"],"log":["Logan"],"logy":["Logan"],"louie":["Louis"],"louise":["Louisa"],"luke":["Lucas","Lukas"],"lucy":["Lucille"],"lewy":["Lewis"],"lew":["Lewis"],"leba":["Lewis"],"luckier":["Lucina"],"lucinait":["Lucina"],"mac":["MacKenzie"],"mack":["MacKenzie"],"madeline":["Madelina"],"maddie":["Madeline","Maddison"],"magdaline":["Madeline"],"mads":["Madeline"],"marc":["Marcus","Markus"],"mark":["Marcus","Markus"],"marky":["Marcus","Markus"],"marcy":["Marcus","Markus"],"maggie":["Margaret","Morgan"],"marge":["Margaret"],"meg":["Margaret","Megan"],"megan":["Margaret"],"mary":["Maria","Marianne","Marie"],"marie":["Maria"],"marianne":["Marianna"],"maria":["Marianne"],"mario":["Marion"],"marsh":["Marshall"],"marshy":["Marshall"],"marty":["Martin"],"marv":["Marvin"],"maisie":["Mary"],"polly":["Mary","Paul","Paula","Pauline"],"molly":["Mary"],"mare":["Mary"],"matt":["Mathew"],"matty":["Mathew"],"milan":["Maxim","Maximilian"],"max":["Maxim","Maximilian","Maxwell"],"maxie":["Maxim"],"maxi":["Maxim"],"maaz":["Maxim"],"maxus":["Maxim"],"mayam":["Maxim"],"maxam":["Maxim"],"maxinumisanic":["Maxim"],"maxmillion":["Maxim"],"maxmus":["Maximilian"],"melane":["Melanie"],"elaine":["Melanie"],"mel":["Melanie","Melaina","Melinda","Melissa","Melvin"],"mind":["Melinda"],"linda":["Melinda"],"lissa":["Melissa"],"missy":["Melissa"],"mellie":["Melvin"],"mike":["Michael"],"mick":["Michael"],"mikey":["Michael"],"micky":["Michael"],"shell":["Michelle"],"shelly":["Michelle"],"chelle":["Michelle"],"minnie":["Minerva"],"randy":["Miranda","Randolph"],"mindy":["Miranda"],"mitch":["Mitchell"],"monty":["Montgomery"],"morg":["Morgan"],"moe":["Morris"],"morris":["Morrison"],"nadi":["Nadia"],"tasha":["Natasha"],"tash":["Natasha"],"nat":["Natasha","Nathan","Nathaniel"],"nate":["Nathan","Nathaniel"],"natty":["Nathan"],"nath":["Nathaniel"],"nel":["Nelson"],"niki":["Nicole"],"nickie":["Nicole","Nichola","Nichole"],"nicki":["Nicole","Nichola","Nichole"],"nikki":["Nicole","Nichola","Nichole"],"nige":["Nigel"],"nobby":["Norbert"],"nob":["Norbert"],"bob":["Norbert","Robert"],"bobbie":["Norbert","Roberta"],"bobby":["Norbert","Robert"],"nour":["Norman"],"orman":["Norman"],"orbie":["Norman"],"norm":["Norman"],"ollie":["Oliver","Olivia"],"olly":["Oliver"],"oliwa":["Oliver"],"oli":["Oliver"],"liv":["Olivia","Olive"],"livi":["Olivia"],"via":["Olivia"],"olivetta":["Olive"],"oliver":["Olive"],"ozzy":["Oswald","Oscar"],"pam":["Pamela"],"pat":["Patricia","Patrick"],"patty":["Patricia"],"tricia":["Patricia"],"trish":["Patricia"],"patsy":["Patricia"],"trisha":["Patricia"],"paddy":["Patrick"],"paulie":["Paul","Paula","Pauline"],"pauly":["Paul","Paula"],"pauline":["Paulina"],"paulin":["Pauline"],"penny":["Penelope"],"tula":["Prithula"],"pritu":["Prithula"],"pri":["Prithula"],"prit":["Prithula"],"preity":["Prithula"],"percy":["Percival"],"perry":["Peregrine"],"pippin":["Peregrine"],"pete":["Peter"],"petey":["Peter"],"phil":["Philip","Phillip"],"philly":["Philip","Philippa","Phillip"],"pippa":["Philippa"],"cilla":["Priscilla"],"quin":["Quincy","Quinton"],"quinn":["Quincy","Quinton"],"quince":["Quincy"],"quavie":["Quinton"],"quavix":["Quinton"],"ray":["Rachel","Raymond"],"rach":["Rachel"],"rand":["Randolph"],"ralph":["Raphael"],"rafi":["Raphael"],"becky":["Rebecca"],"becca":["Rebecca"],"becks":["Rebecca"],"bex":["Rebecca"],"bec":["Rebecca"],"reggie":["Regina","Reginald"],"reg":["Reginald"],"rex":["Reginald"],"rae":["Renee"],"richie":["Richard"],"dick":["Richard"],"dicky":["Richard"],"hick":["Richard"],"hickey":["Richard"],"ritu":["Rita"],"rob":["Robert","Robinson"],"robbie":["Robert"],"robby":["Robert"],"robin":["Robert","Robinson"],"robert":["Robinson"],"rod":["Roderick","Rodney","Rodrick","Rodrigo"],"roddy":["Roderick","Rodney","Rodrick","Rodrigo"],"roxy":["Roxanne"],"rox":["Roxanne"],"roxie":["Roxanne"],"russ":["Russell"],"rusty":["Russell"],"scar":["Scarlett"],"scarget":["Scarlett"],"lett":["Scarlett"],"sarghja":["Sára"],"sawrr":["Sára"],"rara":["Sára"],"sasa":["Sára"],"sassy":["Sára"],"sarah":["Sára"],"sab":["Sabrina"],"sabri":["Sabrina"],"sal":["Salvador","Salvatore","Zelda"],"sam":["Samantha","Samuel","Simon"],"sammy":["Samantha","Samuel","Simon"],"sadie":["Sarah"],"sally":["Sarah"],"sebby":["Sebastian"],"seb":["Sebastian"],"bas":["Sebastian"],"bash":["Sebastian"],"shaza":["Sharon"],"sid":["Sidney","Sydney"],"stell":["Stella"],"spence":["Spencer"],"stan":["Stanley"],"stella":["Stellaluna"],"luna":["Stellaluna"],"steph":["Stephanie","Stephen"],"stephie":["Stephanie"],"stefie":["Stephanie"],"steve":["Stephen","Steven"],"stevie":["Stephen","Steven"],"stevo":["Stephen","Steven"],"stuie":["Stuart"],"stu":["Stuart"],"sum":["Summer"],"sue":["Susan"],"susie":["Susan"],"suzy":["Susan"],"suey":["Susan"],"simon":["Sylvester"],"vester":["Sylvester"],"psy":["Sylvester"],"sylvie":["Sylvia"],"sooby":["Sourabh"],"tammy":["Tamara","Tamsin"],"tam":["Tamara","Tamsin"],"terry":["Terence","Teresa","Terrance","Terrence","Theresa","Torrance"],"tel":["Terence","Terrance","Terrence"],"tracy":["Teresa","Theresa"],"tracey":["Teresa","Theresa"],"terrie":["Teresa","Theresa"],"terese":["Teresa"],"terri":["Teresa","Theresa"],"teri":["Teresa","Theresa"],"theo":["Theodore"],"tom":["Thomas","Tomas"],"tommy":["Thomas","Tomas"],"tia":["Tiana"],"tiff":["Tiffany"],"tiffy":["Tiffany"],"titi":["Tiffany"],"tim":["Timothy"],"timmy":["Timothy"],"toby":["Tobias"],"toddy":["Todd"],"trent":["Trenton"],"travis":["Trevor"],"trev":["Trevor"],"trin":["Trinity"],"tris":["Tristan"],"triscuit":["Tristan"],"tyson":["Tyler"],"tyron":["Tyrone"],"val":["Valentine"],"valie":["Valerie"],"vera":["Veronica"],"veronny":["Veronica"],"ronnie":["Veronica"],"vic":["Victor"],"vicky":["Victor","Victoria"],"tory":["Victoria"],"vick":["Victoria"],"vicki":["Victoria"],"vinnie":["Vincent"],"vince":["Vincent"],"vin":["Vincent"],"lettie":["Violet"],"letta":["Violeta"],"oleta":["Violeta"],"viol":["Violeta"],"viola":["Violeta"],"ginny":["Virginia"],"ginger":["Virginia"],"vergy":["Virginia"],"vivy":["Vivian"],"viv":["Vivian"],"vivio":["Vivian"],"valent":["Valentina"],"lentina":["Valentina"],"walt":["Wallace","Walter"],"wally":["Wallace","Walter"],"wal":["Wallace","Walter"],"will":["Wilbur","William"],"wilby":["Wilbur"],"wen":["Wendy"],"wendi":["Wendy"],"wend":["Wendy"],"wes":["Wesley"],"wessie":["Wesley"],"lei":["Wesley"],"willy":["William"],"bill":["William"],"billy":["William"],"liam":["William"],"willie":["William"],"woody":["Woodrow"],"xan":["Xander"],"xandy":["Xander"],"xolo":["Xander"],"savior":["Xavier"],"xavi":["Xavier"],"sime":["Ximena"],"simonetta":["Ximena"],"sima":["Ximena"],"soer xe":["Xuan"],"chua":["Xuan"],"xen":["Xenia"],"zenny":["Xenia"],"sen":["Xenia"],"xin":["Yin"],"chinn":["Yin"],"yip":["Yin"],"yem":["Yong"],"yetch":["Yong"],"yang":["Yong"],"younguth":["Young"],"yugi":["Young"],"seth":["Yousef"],"you":["Yousef"],"steff":["Yousef"],"stef":["Yousef"],"yew":["Yue"],"dewy":["Yue"],"duel":["Yue"],"von":["Yvonne"],"zachary":["Zacarias","Zachariah","Zacharias","Zechariah"],"zack":["Zacharias","Zachary"],"zac":["Zachary"],"zach":["Zachary"],"zak":["Zachary"],"zaid":["Zaiden"],"zoo":["Zane"],"zayn":["Zane"],"zacchary":["Zechariah"],"zachery":["Zechariah"],"zackary":["Zechariah"],"zackery":["Zechariah"],"zakary":["Zechariah"],"zell":["Zelda"],"sel":["Zelda"],"zella":["Zelda"],"zealand":["Zelda"],"zig":["Ziggy"],"zag":["Ziggy"],"zags":["Ziggy"],"sui":["Ziggy"],"zo-zo":["Zoe"],"zoey":["Zoe"],"art":["Arthur","Arturo"],"artie":["Arthur","Arturo"],"kirstie":["Kirstin"]}
+;
+
+
+  // ---------- Helpers ----------
+
+  function escapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+    });
+  }
+
+  // Split using whitespace AND hyphens — used for initials and sub-part matching.
+  function splitForInitials(name) {
+    return name.split(/[\s\-]+/).filter(function (p) { return p.length > 0; });
+  }
+
+  function splitWhitespace(name) {
+    return name.split(/\s+/).filter(function (p) { return p.length > 0; });
+  }
+
+  function getInitials(name) {
+    return splitForInitials(name).map(function (p) { return p[0].toUpperCase(); }).join('');
+  }
+
+  function startsWithUpper(s) {
+    return /^[A-Z]/.test(s);
+  }
+
+  // True if Levenshtein distance(a, b) <= 1.
+  function isCloseEnough(a, b) {
+    if (a === b) return true;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    var shorter = a.length <= b.length ? a : b;
+    var longer  = a.length <= b.length ? b : a;
+    var i = 0, j = 0, edits = 0;
+    while (i < shorter.length && j < longer.length) {
+      if (shorter[i] === longer[j]) { i++; j++; }
+      else {
+        if (++edits > 1) return false;
+        if (shorter.length === longer.length) { i++; j++; }
+        else { j++; }
+      }
+    }
+    edits += (longer.length - j);
+    return edits <= 1;
+  }
+
+  // isCloseEnough but only for strings of length >= 5. For shorter strings
+  // edit-distance 1 is too lossy (May vs Mary, Bob vs Rob, John vs Jon).
+  function isCloseEnoughStrict(a, b) {
+    if (a === b) return true;
+    if (Math.min(a.length, b.length) < 5) return false;
+    return isCloseEnough(a, b);
+  }
+
+  function sharesPrefix(a, b, minLen) {
+    var n = Math.min(a.length, b.length);
+    if (n < minLen) return false;
+    for (var i = 0; i < minLen; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  // ---------- Forward dictionary + alias-set construction ----------
+
+  // Forward map: lowercase canonical -> [lowercase hypocoristics]. Derived from HYPO_DICT.
+  var CANON_TO_HYPOS = (function () {
+    var m = {};
+    Object.keys(HYPO_DICT).forEach(function (hypo) {
+      HYPO_DICT[hypo].forEach(function (canon) {
+        var lc = canon.toLowerCase();
+        if (!m[lc]) m[lc] = [];
+        if (m[lc].indexOf(hypo) === -1) m[lc].push(hypo);
+      });
+    });
+    return m;
+  })();
+  var HYPO_KEYS  = Object.keys(HYPO_DICT);
+  var CANON_KEYS = Object.keys(CANON_TO_HYPOS);
+
+  // Add `name` to `aliases`, plus its -y/-ie sibling form. The PDF notes that "-y"
+  // and "-ie" are interchangeable suffixes (Freddy/Freddie, Bobby/Bobbie); the
+  // dictionary doesn't always list both, so we expand them.
+  function addAliasWithYIE(aliases, name) {
+    aliases.add(name);
+    if (name.length >= 4 && name.charAt(name.length - 1) === 'y') {
+      aliases.add(name.slice(0, -1) + 'ie');
+    } else if (name.length >= 5 && name.slice(-2) === 'ie') {
+      aliases.add(name.slice(0, -2) + 'y');
+    }
+  }
+
+  // For a pupil's given name `g` (lowercase), return the set of all names
+  // (lowercase) that should resolve to that pupil. The set is built from:
+  //
+  //   (A) If g is a canonical in the dictionary, add all its hypocoristics
+  //       (these are explicitly listed as its diminutives).
+  //   (B) If g is a hypocoristic, add the canonicals it derives from, plus any
+  //       sibling hypocoristic that shares a >=3 char prefix with g (so "Fred"
+  //       also pulls in "Freddy" but not the unrelated "Eric"/"Rick").
+  //
+  // Both (A) and (B) also include spelling-variant matches (edit-distance 1,
+  // length >= 5) so "Matthew" finds the dictionary's "Mathew" entry.
+  function buildAliasSet(givenName) {
+    var g = givenName.toLowerCase();
+    var aliases = new Set();
+    addAliasWithYIE(aliases, g);
+
+    // (A) g treated as canonical
+    var canonKeys = new Set();
+    if (CANON_TO_HYPOS[g]) canonKeys.add(g);
+    CANON_KEYS.forEach(function (key) {
+      if (key !== g && isCloseEnoughStrict(key, g)) canonKeys.add(key);
+    });
+    canonKeys.forEach(function (canon) {
+      addAliasWithYIE(aliases, canon);
+      CANON_TO_HYPOS[canon].forEach(function (h) { addAliasWithYIE(aliases, h); });
+    });
+
+    // (B) g treated as hypocoristic
+    var hypoKeys = new Set();
+    if (HYPO_DICT[g]) hypoKeys.add(g);
+    HYPO_KEYS.forEach(function (key) {
+      if (key !== g && isCloseEnoughStrict(key, g)) hypoKeys.add(key);
+    });
+    hypoKeys.forEach(function (hypo) {
+      HYPO_DICT[hypo].forEach(function (canon) {
+        var lc = canon.toLowerCase();
+        addAliasWithYIE(aliases, lc);
+        var siblings = CANON_TO_HYPOS[lc];
+        if (siblings) {
+          siblings.forEach(function (sib) {
+            if (sib !== g && (sharesPrefix(sib, g, 3) || isCloseEnoughStrict(sib, g))) {
+              addAliasWithYIE(aliases, sib);
+            }
+          });
+        }
+      });
+    });
+
+    return aliases;
+  }
+
+  // ---------- Pupil-name processing ----------
+
+  function processNames(namesInput) {
+    var raw = namesInput.split(',').map(function (s) { return s.trim(); })
+                                   .filter(function (s) { return s.length > 0; });
+
+    var seen = new Map();
+    var duplicates = new Set();
+    raw.forEach(function (name) {
+      var key = name.toLowerCase();
+      if (seen.has(key)) {
+        duplicates.add(seen.get(key));
+        duplicates.add(name);
+      } else {
+        seen.set(key, name);
+      }
+    });
+
+    if (duplicates.size > 0) {
+      return { entries: null, duplicates: Array.from(duplicates) };
+    }
+
+    var entries = raw.map(function (name) {
+      return {
+        fullName: name,
+        tokens: splitWhitespace(name),
+        subparts: splitForInitials(name),
+        initials: getInitials(name)
+      };
+    });
+
+    return { entries: entries, duplicates: [] };
+  }
+
+  // All contiguous subsequences of `parts` with length >= 2.
+  // For "David Langsley-Brown" (subparts = [David, Langsley, Brown]) this yields
+  // [David, Langsley, Brown], [David, Langsley], [Langsley, Brown].
+  function getContiguousSubsets(parts) {
+    var result = [];
+    for (var len = parts.length; len >= 2; len--) {
+      for (var i = 0; i + len <= parts.length; i++) {
+        result.push(parts.slice(i, i + len));
+      }
+    }
+    return result;
+  }
+
+  function buildPartIndex(entries) {
+    var m = new Map();
+    entries.forEach(function (e) {
+      e.subparts.forEach(function (p) {
+        var k = p.toLowerCase();
+        if (!m.has(k)) m.set(k, new Set());
+        m.get(k).add(e);
+      });
+    });
+    return m;
+  }
+
+  function buildSubsetIndex(entries) {
+    var m = new Map();
+    entries.forEach(function (e) {
+      if (e.subparts.length < 2) return;
+      getContiguousSubsets(e.subparts).forEach(function (sub) {
+        var key = sub.map(function (s) { return s.toLowerCase(); }).join('|');
+        if (!m.has(key)) m.set(key, new Set());
+        m.get(key).add(e);
+      });
+    });
+    return m;
+  }
+
+  // Map: every alias-name (lowercase) -> Set of pupil entries that resolve to.
+  // Aliases include the pupil's given name plus every related canonical /
+  // hypocoristic from the dictionary, via buildAliasSet.
+  function buildAliasIndex(entries) {
+    var m = new Map();
+    entries.forEach(function (e) {
+      if (!e.subparts.length) return;
+      var aliases = buildAliasSet(e.subparts[0]);
+      aliases.forEach(function (a) {
+        if (!m.has(a)) m.set(a, new Set());
+        m.get(a).add(e);
+      });
+    });
+    return m;
+  }
+
+  // ---------- Main pipeline ----------
+
+  function anonymise(text, entries) {
+    var subsetIndex = buildSubsetIndex(entries);
+    var partIndex = buildPartIndex(entries);
+    var replacements = [];
+
+    // 1. Contiguous sub-part subsequences (length >= 2) that map to exactly one entry.
+    //    Handles "David Langsley" when the full pupil name is "David Langsley-Brown":
+    //    the pair maps uniquely to that one entry, so it collapses to a single "DLB".
+    //    Separator inside the pattern accepts whitespace or hyphens.
+    subsetIndex.forEach(function (entrySet, key) {
+      if (entrySet.size === 1) {
+        var entry = entrySet.values().next().value;
+        var parts = key.split('|');
+        var pattern = parts.map(escapeRegex).join('[\\s\\-]+');
+        replacements.push({
+          regex: new RegExp('\\b' + pattern + '\\b', 'gi'),
+          initials: entry.initials,
+          weight: parts.length * 100000 + key.length
+        });
+      }
+    });
+
+    // 2. Individual sub-parts mapping to exactly one entry.
+    partIndex.forEach(function (entrySet, partKey) {
+      if (entrySet.size === 1) {
+        var entry = entrySet.values().next().value;
+        replacements.push({
+          regex: new RegExp('\\b' + escapeRegex(partKey) + '\\b', 'gi'),
+          initials: entry.initials,
+          weight: partKey.length
+        });
+      }
+    });
+
+    // Longest / most specific patterns first.
+    replacements.sort(function (a, b) { return b.weight - a.weight; });
+
+    var interim = text;
+    replacements.forEach(function (r) {
+      interim = interim.replace(r.regex, function (match) {
+        return startsWithUpper(match) ? r.initials : match;
+      });
+    });
+
+    // 3. Diminutive / variant scan using the alias index. Each pupil's given
+    //    name is expanded (via buildAliasSet) into the full set of dictionary-
+    //    related forms that should resolve to that pupil — both directions:
+    //      - pupil "Kenneth" picks up "Ken", "Kenny" (canonical -> hypos)
+    //      - pupil "Fred"    picks up "Frederick", "Alfred", "Freddy" (hypo -> canonicals)
+    //    For each remaining capitalised word:
+    //      - one matching pupil   -> replace with their initials
+    //      - multiple pupils      -> conflict; leave untouched and flag it
+    //      - none                 -> leave untouched
+    var aliasIndex = buildAliasIndex(entries);
+    var conflicts = [];
+    var segments = [];
+    var regex = /\b[A-Z][A-Za-zÀ-ÿ'’]+\b/g;
+    var lastIdx = 0;
+    var m;
+
+    while ((m = regex.exec(interim)) !== null) {
+      var word = m[0];
+      var start = m.index;
+      if (start > lastIdx) {
+        segments.push({ type: 'text', value: interim.slice(lastIdx, start) });
+      }
+
+      // Skip likely-freshly-inserted initials (short, all uppercase, e.g. "AG", "MJS").
+      var isInitialsLike = /^[A-Z]+$/.test(word) && word.length <= 6;
+
+      var matched = [];
+      if (!isInitialsLike && word.length >= 3) {
+        var lower = word.toLowerCase();
+        if (aliasIndex.has(lower)) {
+          matched = Array.from(aliasIndex.get(lower));
+        } else {
+          // Edit-distance-1 fallback for unforeseen spelling variants in the text.
+          var seenEntries = new Set();
+          aliasIndex.forEach(function (es, alias) {
+            if (isCloseEnoughStrict(lower, alias)) {
+              es.forEach(function (e) { seenEntries.add(e); });
+            }
+          });
+          matched = Array.from(seenEntries);
+        }
+      }
+
+      if (matched.length === 1) {
+        segments.push({ type: 'replaced', value: matched[0].initials });
+      } else if (matched.length > 1) {
+        segments.push({ type: 'conflict', value: word, candidates: matched });
+        conflicts.push({ word: word, candidates: matched });
+      } else {
+        segments.push({ type: 'text', value: word });
+      }
+
+      lastIdx = start + word.length;
+    }
+    if (lastIdx < interim.length) {
+      segments.push({ type: 'text', value: interim.slice(lastIdx) });
+    }
+
+    return { segments: segments, conflicts: conflicts };
+  }
+
+  function renderOutputHtml(segments) {
+    return segments.map(function (s) {
+      if (s.type === 'conflict') {
+        var candStr = s.candidates.map(function (e) {
+          return e.fullName + ' (' + e.initials + ')';
+        }).join(' / ');
+        return '<span class="highlight-conflict" title="Possible match: ' +
+               escapeHtml(candStr) + '">' + escapeHtml(s.value) + '</span>';
+      }
+      return escapeHtml(s.value);
+    }).join('');
+  }
+
+  function plainTextFromSegments(segments) {
+    return segments.map(function (s) { return s.value; }).join('');
+  }
+
+  // ---------- UI ----------
+
+  var $names = document.getElementById('names');
+  var $text = document.getElementById('text');
+  var $output = document.getElementById('output');
+  var $outputPanel = document.getElementById('output-panel');
+  var $alert = document.getElementById('alert');
+  var $legend = document.getElementById('legend');
+  var $conflictsPanel = document.getElementById('conflicts-panel');
+  var $conflictsList = document.getElementById('conflicts-list');
+  var $anonymise = document.getElementById('anonymise-btn');
+  var $clear = document.getElementById('clear-btn');
+  var $copy = document.getElementById('copy-btn');
+  var $copyStatus = document.getElementById('copy-status');
+
+  var lastPlainOutput = '';
+
+  function showAlert(message, kind) {
+    $alert.className = 'alert ' + (kind || 'warning');
+    $alert.textContent = message;
+    $alert.classList.remove('hidden');
+  }
+
+  function hideAlert() {
+    $alert.classList.add('hidden');
+    $alert.textContent = '';
+  }
+
+  function renderLegend(entries) {
+    if (!entries || entries.length === 0) { $legend.innerHTML = ''; return; }
+    var items = entries.map(function (e) {
+      return '<span class="legend-item">' +
+        escapeHtml(e.fullName) +
+        '<span class="arrow">&rarr;</span>' +
+        '<span class="init">' + escapeHtml(e.initials) + '</span>' +
+        '</span>';
+    }).join('');
+    $legend.innerHTML = '<div><strong>Mapping</strong></div><div class="legend-list">' + items + '</div>';
+  }
+
+  function renderConflicts(conflicts) {
+    if (!conflicts || conflicts.length === 0) {
+      $conflictsPanel.classList.add('hidden');
+      $conflictsList.innerHTML = '';
+      return;
+    }
+    var items = conflicts.map(function (c) {
+      var cands = c.candidates.map(function (e) {
+        return '<strong>' + escapeHtml(e.fullName) + '</strong> (' + escapeHtml(e.initials) + ')';
+      }).join(' or ');
+      return '<li>&ldquo;' + escapeHtml(c.word) + '&rdquo; could refer to ' + cands + '</li>';
+    }).join('');
+    $conflictsList.innerHTML = items;
+    $conflictsPanel.classList.remove('hidden');
+  }
+
+  function runAnonymise() {
+    hideAlert();
+    var namesInput = $names.value;
+    var text = $text.value;
+
+    if (!namesInput.trim()) {
+      showAlert('Please enter at least one pupil name.', 'warning');
+      $outputPanel.style.display = 'none';
+      return;
+    }
+    if (!text.trim()) {
+      showAlert('Please paste some text to anonymise.', 'warning');
+      $outputPanel.style.display = 'none';
+      return;
+    }
+
+    var processed = processNames(namesInput);
+
+    if (processed.duplicates.length > 0) {
+      var list = processed.duplicates.map(function (n) { return '"' + n + '"'; }).join(', ');
+      showAlert(
+        'Duplicate names detected: ' + list + '. ' +
+        'Please differentiate them (e.g. by adding a surname or initial) before continuing.',
+        'warning'
+      );
+      $outputPanel.style.display = 'none';
+      return;
+    }
+
+    var result = anonymise(text, processed.entries);
+    $output.innerHTML = renderOutputHtml(result.segments);
+    lastPlainOutput = plainTextFromSegments(result.segments);
+    $outputPanel.style.display = 'block';
+    renderLegend(processed.entries);
+    renderConflicts(result.conflicts);
+  }
+
+  $anonymise.addEventListener('click', runAnonymise);
+
+  $clear.addEventListener('click', function () {
+    $names.value = '';
+    $text.value = '';
+    $output.innerHTML = '';
+    lastPlainOutput = '';
+    hideAlert();
+    $outputPanel.style.display = 'none';
+    $legend.innerHTML = '';
+    $conflictsList.innerHTML = '';
+    $conflictsPanel.classList.add('hidden');
+    $copyStatus.textContent = '';
+    $names.focus();
+  });
+
+  $copy.addEventListener('click', function () {
+    var done = function (ok) {
+      $copyStatus.textContent = ok ? 'Copied.' : 'Copy failed.';
+      setTimeout(function () { $copyStatus.textContent = ''; }, 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lastPlainOutput).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = lastPlainOutput;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { done(document.execCommand('copy')); } catch (e) { done(false); }
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      runAnonymise();
+    }
+  });
+})();
+</script>
+</body>
+</html>
