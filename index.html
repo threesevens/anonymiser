@@ -221,6 +221,21 @@
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  // Collapse curly/typographic apostrophes and similar variants to a plain ASCII apostrophe
+  // so that name patterns and pasted text always use the same character.
+  function normalizeApostrophes(s) {
+    return s.replace(/[‘’‛ʼʹʻ՚＇]/g, "'");
+  }
+
+  // Word-boundary assertions that treat apostrophes as part of a word, so that
+  // "O'Connor" is one token rather than splitting at the internal apostrophe.
+  var WB_START = '(?<![A-Za-zÀ-ÿ\'])';
+  var WB_END   = '(?![A-Za-zÀ-ÿ\'])';
+
+  function makeWordRegex(pattern, flags) {
+    return new RegExp(WB_START + pattern + WB_END, flags);
+  }
+
   function escapeHtml(s) {
     return s.replace(/[&<>"']/g, function (c) {
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
@@ -363,7 +378,7 @@
   // ---------- Pupil-name processing ----------
 
   function processNames(namesInput) {
-    var raw = namesInput.split(',').map(function (s) { return s.trim(); })
+    var raw = namesInput.split(',').map(function (s) { return normalizeApostrophes(s.trim()); })
                                    .filter(function (s) { return s.length > 0; });
 
     var seen = new Map();
@@ -465,7 +480,7 @@
         var parts = key.split('|');
         var pattern = parts.map(escapeRegex).join('[\\s\\-]+');
         replacements.push({
-          regex: new RegExp('\\b' + pattern + '\\b', 'gi'),
+          regex: makeWordRegex(pattern, 'gi'),
           initials: entry.initials,
           weight: parts.length * 100000 + key.length
         });
@@ -477,7 +492,7 @@
       if (entrySet.size === 1) {
         var entry = entrySet.values().next().value;
         replacements.push({
-          regex: new RegExp('\\b' + escapeRegex(partKey) + '\\b', 'gi'),
+          regex: makeWordRegex(escapeRegex(partKey), 'gi'),
           initials: entry.initials,
           weight: partKey.length
         });
@@ -657,7 +672,7 @@
       return;
     }
 
-    var result = anonymise(text, processed.entries);
+    var result = anonymise(normalizeApostrophes(text), processed.entries);
     $output.innerHTML = renderOutputHtml(result.segments);
     lastPlainOutput = plainTextFromSegments(result.segments);
     $outputPanel.style.display = 'block';
