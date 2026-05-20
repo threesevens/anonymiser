@@ -406,6 +406,20 @@
       };
     });
 
+    // Resolve initials clashes: if two or more pupils share the same initials,
+    // append a sequence number to each in input order (EO → EO1, EO2, …).
+    var initialsCount = {};
+    entries.forEach(function (e) {
+      initialsCount[e.initials] = (initialsCount[e.initials] || 0) + 1;
+    });
+    var initialsSeq = {};
+    entries.forEach(function (e) {
+      if (initialsCount[e.initials] > 1) {
+        initialsSeq[e.initials] = (initialsSeq[e.initials] || 0) + 1;
+        e.initials = e.initials + initialsSeq[e.initials];
+      }
+    });
+
     return { entries: entries, duplicates: [] };
   }
 
